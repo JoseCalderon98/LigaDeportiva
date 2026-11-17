@@ -1,0 +1,26 @@
+meta {
+  name: 04-resultado-exito-200
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/torneos/{{torneoId}}/partidos/{{partidoId}}/resultado
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "golesLocal": 2,
+    "golesVisitante": 1
+  }
+}

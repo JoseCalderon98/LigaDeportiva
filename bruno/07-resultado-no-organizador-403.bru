@@ -1,0 +1,26 @@
+meta {
+  name: 07-resultado-no-organizador-403
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/torneos/{{torneoId}}/partidos/{{partidoId}}/resultado
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: token-de-usuario-no-organizador
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "golesLocal": 3,
+    "golesVisitante": 0
+  }
+}

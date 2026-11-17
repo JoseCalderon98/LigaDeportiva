@@ -1,0 +1,26 @@
+meta {
+  name: 05-resultado-validacion-400
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/torneos/{{torneoId}}/partidos/{{partidoId}}/resultado
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "golesLocal": -1,
+    "golesVisitante": 2
+  }
+}

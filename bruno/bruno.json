@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "45-liga-deportiva",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

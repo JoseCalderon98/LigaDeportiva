@@ -1,0 +1,652 @@
+openapi: 3.0.3
+info:
+  title: API Liga Deportiva
+  description: >-
+    Especificación de la API REST para la gestión de torneos, equipos,
+    generación de calendarios round-robin, cálculo automático de tabla de
+    posiciones con desempates federativos y autenticación segura con cookies
+    HttpOnly.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Servidor de desarrollo local
+
+paths:
+  /api/auth/sesion:
+    post:
+      summary: Iniciar sesión y crear cookie de sesión HttpOnly
+      description: >-
+        Verifica el token de Firebase Auth emitido en el cliente y establece
+        una cookie de sesión `sesion` segura con directivas HttpOnly, Secure,
+        SameSite=Lax con vigencia de 5 días.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SesionInput'
+      responses:
+        '204':
+          description: Sesión establecida exitosamente (cookie HttpOnly seteada)
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+    delete:
+      summary: Cerrar sesión activa
+      description: Revoca y borra la cookie de sesión HttpOnly.
+      responses:
+        '204':
+          description: Sesión finalizada correctamente
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/auth/yo:
+    get:
+      summary: Obtener perfil del usuario autenticado
+      description: Retorna el identificador, correo y rol del usuario de la sesión.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Datos del usuario autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - usuario
+                properties:
+                  usuario:
+                    type: object
+                    required:
+                      - uid
+                      - rol
+                    properties:
+                      uid:
+                        type: string
+                      correo:
+                        type: string
+                        nullable: true
+                      rol:
+                        type: string
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos:
+    get:
+      summary: Listar torneos disponibles con paginación
+      description: Retorna torneos paginados mediante cursor.
+      parameters:
+        - name: limite
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista paginada de torneos
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - torneos
+                  - siguienteCursor
+                properties:
+                  torneos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Torneo'
+                  siguienteCursor:
+                    type: string
+                    nullable: true
+        '500':
+          $ref: '#/components/responses/500InternalError'
+    post:
+      summary: Crear un nuevo torneo
+      description: Crea un torneo vinculándolo con el organizador autenticado.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearTorneoInput'
+      responses:
+        '201':
+          description: Torneo creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Torneo'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos/{id}/equipos:
+    post:
+      summary: Inscribir un equipo en el torneo
+      description: Agrega un equipo a la subcolección del torneo. Requiere ser el organizador.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearEquipoInput'
+      responses:
+        '201':
+          description: Equipo registrado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipo'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos/{id}/calendario:
+    post:
+      summary: Generar calendario todos contra todos (round-robin)
+      description: Genera automáticamente el calendario equilibrado de partidos. Requiere ser organizador.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerarCalendarioInput'
+      responses:
+        '201':
+          description: Calendario generado y almacenado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - partidos
+                properties:
+                  partidos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Partido'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos/{id}/posiciones:
+    get:
+      summary: Obtener tabla de posiciones y estado del torneo
+      description: Calcula dinámicamente la tabla de posiciones con los criterios de desempate federativos.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tabla de posiciones calculada y datos del torneo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoTorneoResponse'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos/{id}/partidos/{pid}/resultado:
+    put:
+      summary: Registrar o actualizar el resultado oficial de un partido
+      description: >-
+        Actualiza los goles de local y visitante. Valida permisos de
+        organizador (403), parámetros de goles enteros no negativos (400) y
+        recalcula la tabla.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultadoInput'
+      responses:
+        '200':
+          description: Marcador actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - partido
+                properties:
+                  partido:
+                    $ref: '#/components/schemas/Partido'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/liga-deportiva/upload:
+    post:
+      summary: Subir escudo o imagen mediante Vercel Blob
+      description: >-
+        Gestiona la generación de tokens y almacenamiento de imágenes en Vercel
+        Blob con restricción a tipos png, jpeg y webp (máximo 2MB).
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Instrucciones de subida o resultado del blob
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+  /api/torneos/demo/posiciones:
+    get:
+      summary: Obtener datos y posiciones del torneo de demostración
+      description: Retorna el estado completo del torneo de prueba en memoria.
+      responses:
+        '200':
+          description: Estado del torneo de demostración
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoTorneoResponse'
+        '500':
+          $ref: '#/components/responses/500InternalError'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sesion
+      description: Cookie de sesión HttpOnly verificada con Firebase Admin
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token de identidad emitido por Firebase Authentication
+
+  responses:
+    400BadRequest:
+      description: Solicitud con datos inválidos o formato incorrecto
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    401Unauthorized:
+      description: Autenticación requerida o sesión inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    403Forbidden:
+      description: Permisos insuficientes o violación de origen CSRF
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    404NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    409Conflict:
+      description: Conflicto con el estado actual del recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    500InternalError:
+      description: Error no controlado en el servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Datos inválidos
+        detalles:
+          type: array
+          items:
+            type: object
+            required:
+              - campo
+              - mensaje
+            properties:
+              campo:
+                type: string
+                example: golesLocal
+              mensaje:
+                type: string
+                example: Los goles no pueden ser negativos
+
+    SesionInput:
+      type: object
+      required:
+        - idToken
+      properties:
+        idToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIs...
+
+    CrearTorneoInput:
+      type: object
+      required:
+        - nombre
+      properties:
+        nombre:
+          type: string
+          example: Torneo Apertura 2026
+        temporada:
+          type: string
+          example: '2026'
+
+    CrearEquipoInput:
+      type: object
+      required:
+        - nombre
+      properties:
+        nombre:
+          type: string
+          example: Tigres FC
+        escudoUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://ejemplo.com/escudo.png
+
+    GenerarCalendarioInput:
+      type: object
+      required:
+        - fechaInicio
+      properties:
+        fechaInicio:
+          type: string
+          format: date-time
+          example: '2026-11-20T18:00:00Z'
+
+    ResultadoInput:
+      type: object
+      required:
+        - golesLocal
+        - golesVisitante
+      properties:
+        golesLocal:
+          type: integer
+          minimum: 0
+          example: 2
+        golesVisitante:
+          type: integer
+          minimum: 0
+          example: 1
+
+    Torneo:
+      type: object
+      required:
+        - id
+        - nombre
+      properties:
+        id:
+          type: string
+          example: torneo-clausura-2026
+        nombre:
+          type: string
+          example: Torneo Clausura 2026
+        organizadorUid:
+          type: string
+          example: usr-admin-123
+        temporada:
+          type: string
+          example: '2026'
+        activo:
+          type: boolean
+          example: true
+        creadoEn:
+          type: string
+          format: date-time
+          example: '2026-11-01T00:00:00Z'
+
+    Equipo:
+      type: object
+      required:
+        - id
+        - nombre
+        - escudoUrl
+      properties:
+        id:
+          type: string
+          example: eq-1
+        nombre:
+          type: string
+          example: Águilas Doradas
+        escudoUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://ejemplo.com/escudo.png
+
+    Partido:
+      type: object
+      required:
+        - id
+        - localId
+        - visitanteId
+        - fecha
+        - golesLocal
+        - golesVisitante
+        - jugado
+      properties:
+        id:
+          type: string
+          example: part-1
+        localId:
+          type: string
+          example: eq-1
+        visitanteId:
+          type: string
+          example: eq-2
+        fecha:
+          type: string
+          format: date-time
+          example: '2026-11-20T18:00:00Z'
+        golesLocal:
+          type: integer
+          nullable: true
+          example: 2
+        golesVisitante:
+          type: integer
+          nullable: true
+          example: 1
+        jugado:
+          type: boolean
+          example: true
+        jornada:
+          type: integer
+          example: 1
+
+    PosicionTabla:
+      type: object
+      required:
+        - posicion
+        - equipoId
+        - nombre
+        - escudoUrl
+        - pj
+        - pg
+        - pe
+        - pp
+        - gf
+        - gc
+        - dg
+        - pts
+      properties:
+        posicion:
+          type: integer
+          example: 1
+        equipoId:
+          type: string
+          example: eq-1
+        nombre:
+          type: string
+          example: Águilas Doradas
+        escudoUrl:
+          type: string
+          nullable: true
+        pj:
+          type: integer
+          example: 3
+        pg:
+          type: integer
+          example: 2
+        pe:
+          type: integer
+          example: 1
+        pp:
+          type: integer
+          example: 0
+        gf:
+          type: integer
+          example: 6
+        gc:
+          type: integer
+          example: 2
+        dg:
+          type: integer
+          example: 4
+        pts:
+          type: integer
+          example: 7
+
+    Goleador:
+      type: object
+      required:
+        - id
+        - nombre
+        - equipoId
+        - goles
+      properties:
+        id:
+          type: string
+          example: gol-1
+        nombre:
+          type: string
+          example: Carlos Gómez
+        equipoId:
+          type: string
+          example: eq-1
+        goles:
+          type: integer
+          example: 5
+
+    EstadoTorneoResponse:
+      type: object
+      required:
+        - torneo
+        - equipos
+        - partidos
+        - posiciones
+        - goleadores
+      properties:
+        torneo:
+          $ref: '#/components/schemas/Torneo'
+        equipos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Equipo'
+        partidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Partido'
+        posiciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosicionTabla'
+        goleadores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goleador'

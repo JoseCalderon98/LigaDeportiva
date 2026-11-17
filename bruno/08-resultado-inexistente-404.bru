@@ -1,0 +1,26 @@
+meta {
+  name: 08-resultado-inexistente-404
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/torneos/{{torneoId}}/partidos/partido-inexistente/resultado
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "golesLocal": 1,
+    "golesVisitante": 0
+  }
+}

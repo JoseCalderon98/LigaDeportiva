@@ -1,0 +1,22 @@
+meta {
+  name: 06-resultado-sin-sesion-401
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/torneos/{{torneoId}}/partidos/{{partidoId}}/resultado
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "golesLocal": 1,
+    "golesVisitante": 1
+  }
+}
