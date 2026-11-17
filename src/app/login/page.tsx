@@ -2,7 +2,10 @@
 
 import { useState, type FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+} from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase-client";
 
 function LoginForm() {
@@ -10,7 +13,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const destinoRedireccion = searchParams.get("redirect") || "/admin/partidos";
 
-  const [correo, setCorreo] = useState<string>("");
+  const [modoRegistro, setModoRegistro] = useState<boolean>(false);
+  const [correo, setCorreo] = useState<string>("josecalderon11f@gmail.com");
   const [password, setPassword] = useState<string>("");
   const [cargando, setCargando] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,15 +24,46 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setCargando(true);
-    setAnuncioLive("Iniciando sesión...");
+    setAnuncioLive(
+      modoRegistro ? "Creando cuenta en Firebase..." : "Iniciando sesión..."
+    );
 
     try {
       const auth = getClientAuth();
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        correo.trim(),
-        password
-      );
+      const emailLimpio = correo.trim();
+      let userCredential;
+
+      if (modoRegistro) {
+        userCredential = await createUserWithEmailAndPassword(
+          auth,
+          emailLimpio,
+          password
+        );
+      } else {
+        try {
+          userCredential = await signInWithEmailAndPassword(
+            auth,
+            emailLimpio,
+            password
+          );
+        } catch (signInErr: unknown) {
+          const codigo =
+            typeof signInErr === "object" &&
+            signInErr !== null &&
+            "code" in signInErr
+              ? String((signInErr as { code: unknown }).code)
+              : "";
+          if (codigo === "auth/user-not-found") {
+            userCredential = await createUserWithEmailAndPassword(
+              auth,
+              emailLimpio,
+              password
+            );
+          } else {
+            throw signInErr;
+          }
+        }
+      }
 
       // Obtenemos el idToken para la creación de la cookie HttpOnly
       const idToken = await userCredential.user.getIdToken();
@@ -76,7 +111,7 @@ function LoginForm() {
 
       <div className="text-center space-y-2">
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
-          Iniciar Sesión
+          {modoRegistro ? "Crear Cuenta de Organizador" : "Iniciar Sesión"}
         </h1>
         <p className="text-sm text-slate-600 dark:text-slate-400">
           Accede al panel de administración para gestionar torneos y marcadores.
@@ -113,7 +148,7 @@ function LoginForm() {
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
             className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-            placeholder="organizador@liga.com"
+            placeholder="josecalderon11f@gmail.com"
           />
         </div>
 
@@ -128,7 +163,7 @@ function LoginForm() {
             id="input-password"
             type="password"
             name="password"
-            autoComplete="current-password"
+            autoComplete={modoRegistro ? "new-password" : "current-password"}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -142,8 +177,29 @@ function LoginForm() {
           disabled={cargando}
           className="w-full flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer disabled:cursor-not-allowed"
         >
-          {cargando ? "Iniciando sesión..." : "Ingresar"}
+          {cargando
+            ? modoRegistro
+              ? "Registrando usuario..."
+              : "Iniciando sesión..."
+            : modoRegistro
+              ? "Crear cuenta e ingresar"
+              : "Ingresar"}
         </button>
+
+        <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => {
+              setModoRegistro((prev) => !prev);
+              setError(null);
+            }}
+            className="text-xs sm:text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded px-2 py-1 cursor-pointer"
+          >
+            {modoRegistro
+              ? "¿Ya tienes cuenta? Inicia sesión aquí"
+              : "¿No tienes cuenta en Firebase? Regístrate aquí"}
+          </button>
+        </div>
       </form>
     </div>
   );

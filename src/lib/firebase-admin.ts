@@ -1,6 +1,27 @@
-import { initializeApp, cert, getApps, getApp, type App } from "firebase-admin/app";
-import { getAuth, type Auth } from "firebase-admin/auth";
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { createRequire } from "node:module";
+import type { App } from "firebase-admin/app";
+import type { Auth } from "firebase-admin/auth";
+import type { Firestore } from "firebase-admin/firestore";
+
+const runtimeRequire = createRequire(
+  typeof __filename !== "undefined" ? __filename : import.meta.url
+);
+
+type FirebaseAdminAppModule = typeof import("firebase-admin/app");
+type FirebaseAdminAuthModule = typeof import("firebase-admin/auth");
+type FirebaseAdminFirestoreModule = typeof import("firebase-admin/firestore");
+
+function loadAdminAppModule(): FirebaseAdminAppModule {
+  return runtimeRequire("firebase-admin/app") as FirebaseAdminAppModule;
+}
+
+function loadAdminAuthModule(): FirebaseAdminAuthModule {
+  return runtimeRequire("firebase-admin/auth") as FirebaseAdminAuthModule;
+}
+
+function loadAdminFirestoreModule(): FirebaseAdminFirestoreModule {
+  return runtimeRequire("firebase-admin/firestore") as FirebaseAdminFirestoreModule;
+}
 
 let adminApp: App | null = null;
 
@@ -14,6 +35,8 @@ function getFirebaseAdminApp(): App {
       "Seguridad: firebase-admin solo puede ejecutarse en el entorno del servidor."
     );
   }
+
+  const { initializeApp, cert, getApps, getApp } = loadAdminAppModule();
 
   if (getApps().length > 0) {
     return getApp();
@@ -67,6 +90,7 @@ function getFirebaseAdminApp(): App {
  * Retorna la instancia de Firebase Admin Auth.
  */
 export function getAdminAuth(): Auth {
+  const { getAuth } = loadAdminAuthModule();
   return getAuth(getFirebaseAdminApp());
 }
 
@@ -74,5 +98,6 @@ export function getAdminAuth(): Auth {
  * Retorna la instancia de Firebase Admin Firestore.
  */
 export function getAdminDb(): Firestore {
+  const { getFirestore } = loadAdminFirestoreModule();
   return getFirestore(getFirebaseAdminApp());
 }

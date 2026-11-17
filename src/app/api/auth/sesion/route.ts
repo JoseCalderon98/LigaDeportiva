@@ -20,9 +20,8 @@ export const POST = manejar(async (request: NextRequest) => {
   const body = await request.json().catch(() => null);
   const { idToken } = SesionInputSchema.parse(body);
 
-  const auth = getAdminAuth();
-
   try {
+    const auth = getAdminAuth();
     const sessionCookie = await auth.createSessionCookie(idToken, {
       expiresIn: CINCO_DIAS_MS,
     });
