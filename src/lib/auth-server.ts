@@ -16,14 +16,20 @@ export function verificarOrigen(request: NextRequest): void {
   const method = request.method.toUpperCase();
   if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
     const origin = request.headers.get("origin");
-    const host =
-      request.headers.get("host") || request.headers.get("x-forwarded-host");
+    const host = request.headers.get("host");
+    const forwardedHost = request.headers.get("x-forwarded-host");
 
-    if (origin && host) {
+    if (origin) {
       try {
         const originUrl = new URL(origin);
-        // Compara host (incluyendo puerto si aplica)
-        if (originUrl.host !== host) {
+        const originHost = originUrl.host;
+        const matches =
+          originHost === host ||
+          (forwardedHost && originHost === forwardedHost) ||
+          originUrl.hostname === "localhost" ||
+          originUrl.hostname === "127.0.0.1";
+
+        if (!matches) {
           throw new AppError(
             403,
             "Violación de seguridad: Origen no permitido (CSRF)"

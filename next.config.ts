@@ -15,19 +15,7 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: {
-    "/api/**/*": [
-      "./node_modules/firebase-admin/**/*",
-      "./node_modules/@google-cloud/**/*",
-      "./node_modules/@grpc/**/*",
-      "./node_modules/google-gax/**/*",
-      "./node_modules/google-auth-library/**/*",
-      "./node_modules/jsonwebtoken/**/*",
-      "./node_modules/jwks-rsa/**/*",
-      "./node_modules/@fastify/busboy/**/*",
-      "./node_modules/fast-deep-equal/**/*",
-    ],
-  },
+  serverExternalPackages: ["firebase-admin"],
   turbopack: {
     rules: {
       "*.css": {
