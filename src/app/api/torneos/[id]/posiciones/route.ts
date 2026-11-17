@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 export const GET = manejar(
   async (
     _request: NextRequest,
-    context?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
-    const params = await context?.params;
+    const params = await context.params;
     const torneoId = typeof params?.id === "string" ? params.id : "";
 
     const torneo = await TorneosRepository.obtenerTorneoPorId(torneoId);

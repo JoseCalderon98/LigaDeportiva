@@ -18,13 +18,10 @@ export class AppError extends Error {
   }
 }
 
-type RouteHandlerContext = {
-  params?: Promise<Record<string, string | string[]>>;
-};
-
-type RouteHandler = (
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteHandler<T = any> = (
   request: NextRequest,
-  context?: RouteHandlerContext
+  context: T
 ) => Promise<NextResponse | Response> | NextResponse | Response;
 
 /**
@@ -34,8 +31,9 @@ type RouteHandler = (
  * - Convierte errores no controlados a 500: `{ error: "Error interno del servidor" }` sin filtrar secretos.
  * - Inyecta y registra `x-request-id` para trazabilidad segura.
  */
-export function manejar(handler: RouteHandler): RouteHandler {
-  return async (request: NextRequest, context?: RouteHandlerContext) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function manejar<T = any>(handler: RouteHandler<T>) {
+  return async (request: NextRequest, context: T) => {
     const requestId =
       request.headers.get("x-request-id") || crypto.randomUUID();
 

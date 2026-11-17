@@ -16,12 +16,12 @@ const CrearEquipoSchema = z
 export const POST = manejar(
   async (
     request: NextRequest,
-    context?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
     verificarOrigen(request);
     const usuario = await requerirUsuario(request);
 
-    const params = await context?.params;
+    const params = await context.params;
     const torneoId = typeof params?.id === "string" ? params.id : "";
 
     const torneo = await TorneosRepository.obtenerTorneoPorId(torneoId);

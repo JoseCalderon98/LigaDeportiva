@@ -10,12 +10,12 @@ export const runtime = "nodejs";
 export const PUT = manejar(
   async (
     request: NextRequest,
-    context?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
     verificarOrigen(request);
     const usuario = await requerirUsuario(request);
 
-    const params = await context?.params;
+    const params = await context.params;
     const torneoId = typeof params?.id === "string" ? params.id : "";
     const partidoId = typeof params?.pid === "string" ? params.pid : "";
 
