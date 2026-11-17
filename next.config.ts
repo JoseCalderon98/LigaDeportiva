@@ -16,14 +16,6 @@ const cspHeader = `
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin"],
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
   images: {
     remotePatterns: [
       {
