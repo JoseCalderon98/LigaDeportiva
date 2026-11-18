@@ -288,4 +288,55 @@ export const TorneosRepository = {
       };
     });
   },
+
+  /**
+   * Obtiene un equipo y el contexto completo de su torneo en Firestore.
+   */
+  async obtenerEquipoConTorneo(equipoId: string): Promise<{
+    equipo: Equipo;
+    torneo: TorneoRegistro;
+    equipos: Equipo[];
+    partidos: Partido[];
+  } | null> {
+    const db = getAdminDb();
+    const snap = await db.collectionGroup("equipos").get();
+    const equipoDoc = snap.docs.find((d) => d.id === equipoId);
+    if (!equipoDoc) {
+      return null;
+    }
+
+    const torneoDocRef = equipoDoc.ref.parent.parent;
+    if (!torneoDocRef) {
+      return null;
+    }
+
+    const torneoSnap = await torneoDocRef.get();
+    if (!torneoSnap.exists) {
+      return null;
+    }
+
+    const dataTorneo = torneoSnap.data()!;
+    const torneo: TorneoRegistro = {
+      id: torneoSnap.id,
+      nombre: dataTorneo.nombre,
+      organizadorUid: dataTorneo.organizadorUid,
+      temporada: dataTorneo.temporada,
+      activo: dataTorneo.activo,
+      creadoEn: dataTorneo.creadoEn,
+    };
+
+    const [equipos, partidos] = await Promise.all([
+      TorneosRepository.obtenerEquipos(torneo.id),
+      TorneosRepository.obtenerPartidos(torneo.id),
+    ]);
+
+    const dataEquipo = equipoDoc.data();
+    const equipo: Equipo = {
+      id: equipoDoc.id,
+      nombre: dataEquipo.nombre,
+      escudoUrl: dataEquipo.escudoUrl ?? null,
+    };
+
+    return { equipo, torneo, equipos, partidos };
+  },
 };

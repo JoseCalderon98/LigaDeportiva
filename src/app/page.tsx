@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { TablaPosiciones } from "@/components/TablaPosiciones";
 import { GraficoPuntos } from "@/components/GraficoPuntos";
+import type { TorneoRegistro } from "@/repositories/torneos.repo";
 import type {
-  Torneo,
   Equipo,
   Partido,
   PosicionTabla,
@@ -12,7 +13,7 @@ import type {
 } from "@/schemas/liga";
 
 interface ApiResponse {
-  torneo: Torneo;
+  torneo: TorneoRegistro;
   equipos: Equipo[];
   partidos: Partido[];
   posiciones: PosicionTabla[];
@@ -20,15 +21,18 @@ interface ApiResponse {
 }
 
 export default function HomePage() {
+  const [torneos, setTorneos] = useState<TorneoRegistro[]>([]);
+  const [torneoSeleccionadoId, setTorneoSeleccionadoId] = useState<string>("");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const cargarDatos = useCallback(async () => {
+  const cargarDatosTorneo = useCallback(async (torneoId: string) => {
+    if (!torneoId) return;
     setCargando(true);
     setError(null);
     try {
-      const res = await fetch("/api/torneos/demo/posiciones");
+      const res = await fetch(`/api/torneos/${torneoId}/posiciones`);
       if (!res.ok) {
         const errorBody = await res.json().catch(() => null);
         throw new Error(
@@ -49,22 +53,38 @@ export default function HomePage() {
     }
   }, []);
 
+  // 1. Cargar lista de torneos reales de Firestore y el primer torneo inicial
   useEffect(() => {
     let ignorar = false;
-    fetch("/api/torneos/demo/posiciones")
+    fetch("/api/torneos?limite=20")
       .then(async (res) => {
         if (!res.ok) {
-          const errorBody = await res.json().catch(() => null);
-          throw new Error(
-            errorBody?.error ||
-              `Error al cargar datos del torneo (código ${res.status})`
-          );
+          throw new Error(`Error al listar torneos (código ${res.status})`);
         }
         return res.json();
       })
-      .then((json: ApiResponse) => {
+      .then(async (json) => {
+        if (ignorar) return;
+        const lista: TorneoRegistro[] = json.torneos || [];
+        setTorneos(lista);
+        if (lista.length > 0) {
+          const primerId = lista[0].id;
+          setTorneoSeleccionadoId(primerId);
+          try {
+            const resDetalle = await fetch(`/api/torneos/${primerId}/posiciones`);
+            if (resDetalle.ok) {
+              const jsonDetalle: ApiResponse = await resDetalle.json();
+              if (!ignorar) {
+                setData(jsonDetalle);
+                setCargando(false);
+              }
+              return;
+            }
+          } catch {
+            // Continúa a finally
+          }
+        }
         if (!ignorar) {
-          setData(json);
           setCargando(false);
         }
       })
@@ -73,7 +93,7 @@ export default function HomePage() {
           setError(
             err instanceof Error
               ? err.message
-              : "Error inesperado al conectar con el servidor."
+              : "Error inesperado al conectar con Firebase."
           );
           setCargando(false);
         }
@@ -84,29 +104,60 @@ export default function HomePage() {
     };
   }, []);
 
+  const handleCambiarTorneo = (nuevoId: string) => {
+    setTorneoSeleccionadoId(nuevoId);
+    cargarDatosTorneo(nuevoId);
+  };
+
   return (
     <div className="w-full space-y-8">
       {/* Encabezado accesible con el único H1 de la página */}
       <section className="space-y-2">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
-          Torneo Interno 2026 — Clasificación
+          {data?.torneo
+            ? `${data.torneo.nombre} — Clasificación`
+            : "Liga Deportiva — Clasificación"}
         </h1>
         <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
-          Gestión deportiva en tiempo real con recálculo automático de
+          Gestión deportiva en tiempo real conectada a Firebase con recálculo automático de
           posiciones y criterios de desempate federativos.
         </p>
       </section>
+
+      {/* Selector de Torneos si hay torneos registrados en Firebase */}
+      {torneos.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm no-print">
+          <label
+            htmlFor="selector-torneo-home"
+            className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0"
+          >
+            Torneo activo:
+          </label>
+          <select
+            id="selector-torneo-home"
+            value={torneoSeleccionadoId}
+            onChange={(e) => handleCambiarTorneo(e.target.value)}
+            className="flex-1 max-w-xs px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            {torneos.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre} {t.temporada ? `(${t.temporada})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Estado 1: Carga accesible con esqueleto y anuncio de estado */}
       {cargando && (
         <div
           role="status"
           aria-busy="true"
-          aria-label="Cargando información del torneo y tabla de posiciones..."
+          aria-label="Cargando información del torneo y tabla de posiciones desde Firebase..."
           className="w-full space-y-6 animate-pulse"
         >
           <span className="sr-only">
-            Cargando información del torneo y tabla de posiciones...
+            Cargando información del torneo y tabla de posiciones desde Firebase...
           </span>
           <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded w-1/3"></div>
           <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
@@ -133,7 +184,7 @@ export default function HomePage() {
           <div>
             <button
               type="button"
-              onClick={cargarDatos}
+              onClick={() => cargarDatosTorneo(torneoSeleccionadoId)}
               className="inline-flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-colors cursor-pointer"
             >
               Reintentar
@@ -142,45 +193,77 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Estado 3: Vacío (sin datos disponibles) */}
+      {/* Estado 3: Sin torneos registrados en Firebase */}
+      {!cargando && !error && torneos.length === 0 && (
+        <div
+          role="region"
+          aria-labelledby="titulo-sin-torneos"
+          className="w-full p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4 shadow-sm"
+        >
+          <div className="w-12 h-12 mx-auto rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl font-bold">
+            🏆
+          </div>
+          <h2
+            id="titulo-sin-torneos"
+            className="text-lg font-bold text-slate-800 dark:text-slate-200"
+          >
+            No hay torneos registrados en Firebase
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            Ingresa al panel de administración para registrar tu primer torneo, equipos y partidos oficiales.
+          </p>
+          <div>
+            <Link
+              href="/admin/partidos"
+              className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors cursor-pointer"
+            >
+              Ir a Administración
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Estado 4: Torneo registrado pero sin equipos */}
       {!cargando && !error && data && data.equipos.length === 0 && (
         <div
           role="region"
           aria-labelledby="titulo-vacio"
-          className="w-full p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 shadow-sm"
+          className="w-full p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4 shadow-sm"
         >
           <h2
             id="titulo-vacio"
             className="text-lg font-bold text-slate-800 dark:text-slate-200"
           >
-            No hay equipos registrados en el torneo
+            No hay equipos registrados en este torneo
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Aún no se han configurado equipos para este torneo.
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            El torneo &quot;{data.torneo.nombre}&quot; aún no tiene equipos inscritos en Firebase.
           </p>
           <div>
-            <button
-              type="button"
-              onClick={cargarDatos}
-              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors cursor-pointer"
+            <Link
+              href="/admin/partidos"
+              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors cursor-pointer"
             >
-              Reintentar
-            </button>
+              Registrar Equipos
+            </Link>
           </div>
         </div>
       )}
 
-      {/* Estado 4: Éxito con contenido cargado */}
+      {/* Estado 5: Éxito con contenido cargado directamente de Firebase */}
       {!cargando && !error && data && data.equipos.length > 0 && (
         <div className="space-y-12">
-          {/* Componente interactivo de la tabla de posiciones con formulario */}
+          {/* Componente interactivo de la tabla de posiciones con formulario vinculado a Firebase */}
           <TablaPosiciones
+            key={torneoSeleccionadoId}
             equiposIniciales={data.equipos}
             partidosIniciales={data.partidos}
             torneoNombre={data.torneo.nombre}
+            torneoId={torneoSeleccionadoId}
+            onResultadoGuardado={() => cargarDatosTorneo(torneoSeleccionadoId)}
           />
 
-          {/* Gráfico accesible de evolución de puntos por jornada (Hito 2) */}
+          {/* Gráfico accesible de evolución de puntos por jornada */}
           <GraficoPuntos
             equipos={data.equipos}
             partidos={data.partidos}

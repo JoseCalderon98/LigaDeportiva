@@ -10,6 +10,8 @@ export interface TablaPosicionesProps {
   equiposIniciales: Equipo[];
   partidosIniciales: Partido[];
   torneoNombre?: string;
+  torneoId?: string;
+  onResultadoGuardado?: () => void;
 }
 
 type CampoOrden = "posicion" | "pts" | "dg" | "gf";
@@ -19,6 +21,8 @@ export function TablaPosiciones({
   equiposIniciales,
   partidosIniciales,
   torneoNombre = "Torneo",
+  torneoId,
+  onResultadoGuardado,
 }: TablaPosicionesProps) {
   // Estado local para los partidos que permite simular la actualización en vivo
   const [partidos, setPartidos] = useState<Partido[]>(partidosIniciales);
@@ -168,6 +172,45 @@ export function TablaPosiciones({
       const detalle = Object.values(nuevosErrores).join(". ");
       setAnuncioLive(`Error de validación: ${detalle}`);
       return;
+    }
+
+    // Si existe torneoId, persistimos el resultado directamente a Firebase Firestore
+    if (torneoId) {
+      fetch(
+        `/api/torneos/${torneoId}/partidos/${partidoSeleccionadoId}/resultado`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            golesLocal: validacion.data.golesLocal,
+            golesVisitante: validacion.data.golesVisitante,
+          }),
+        }
+      )
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json().catch(() => null);
+            const errorMsg =
+              res.status === 401 || res.status === 403
+                ? "Inicia sesión como organizador para guardar el resultado oficial en Firebase."
+                : errData?.error || "Error al guardar resultado en Firebase";
+            setMensajeExito(null);
+            setErrores({ golesLocal: errorMsg });
+            setAnuncioLive(`Aviso: ${errorMsg}`);
+            return;
+          }
+          if (onResultadoGuardado) {
+            onResultadoGuardado();
+          }
+        })
+        .catch((err) => {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "No se pudo conectar con el servidor.";
+          setErrores({ golesLocal: msg });
+          setAnuncioLive(`Error: ${msg}`);
+        });
     }
 
     // Actualizamos el partido en el estado y recalculamos la tabla en vivo

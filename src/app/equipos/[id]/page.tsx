@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { equiposDemo, partidosDemo } from "@/lib/datos-demo";
+import { TorneosRepository } from "@/repositories/torneos.repo";
 import { calcularTablaPosiciones } from "@/services/posiciones";
 import { formatearFecha } from "@/lib/fechas";
+
+export const dynamic = "force-dynamic";
 
 interface EquipoPageProps {
   params: Promise<{ id: string }>;
@@ -14,36 +16,38 @@ export async function generateMetadata({
   params,
 }: EquipoPageProps): Promise<Metadata> {
   const { id } = await params;
-  const equipo = equiposDemo.find((eq) => eq.id === id);
+  const res = await TorneosRepository.obtenerEquipoConTorneo(id);
 
-  if (!equipo) {
+  if (!res) {
     return {
       title: "Equipo no encontrado — Liga Deportiva",
     };
   }
 
   return {
-    title: `${equipo.nombre} — Estadísticas y Partidos`,
-    description: `Estadísticas, posición actual en la tabla e historial de partidos de ${equipo.nombre}.`,
+    title: `${res.equipo.nombre} — Estadísticas y Partidos`,
+    description: `Estadísticas, posición actual en la tabla e historial de partidos de ${res.equipo.nombre} en ${res.torneo.nombre}.`,
   };
 }
 
 export default async function EquipoPage({ params }: EquipoPageProps) {
   const { id } = await params;
-  const equipo = equiposDemo.find((eq) => eq.id === id);
+  const res = await TorneosRepository.obtenerEquipoConTorneo(id);
 
-  if (!equipo) {
+  if (!res) {
     notFound();
   }
 
+  const { equipo, torneo, equipos, partidos } = res;
+
   // Calculamos la tabla para obtener la posición y estadísticas actuales
-  const tablaPosiciones = calcularTablaPosiciones(equiposDemo, partidosDemo);
+  const tablaPosiciones = calcularTablaPosiciones(equipos, partidos);
   const estadisticas = tablaPosiciones.find((f) => f.equipoId === id);
 
-  const equiposMap = new Map(equiposDemo.map((eq) => [eq.id, eq]));
+  const equiposMap = new Map(equipos.map((eq) => [eq.id, eq]));
 
   // Historial de partidos en los que participa este equipo
-  const partidosEquipo = partidosDemo.filter(
+  const partidosEquipo = partidos.filter(
     (p) => p.localId === id || p.visitanteId === id
   );
 
@@ -60,7 +64,7 @@ export default async function EquipoPage({ params }: EquipoPageProps) {
               href="/"
               className="hover:text-blue-600 dark:hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded px-1"
             >
-              Tabla general
+              {torneo.nombre}
             </Link>
           </li>
           <li aria-hidden="true">/</li>
